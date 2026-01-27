@@ -25,3 +25,5 @@ logs
 .nuxt.config.ts
 .package.json
 .package-lock.json
+Dockerfile
+compose.yaml
