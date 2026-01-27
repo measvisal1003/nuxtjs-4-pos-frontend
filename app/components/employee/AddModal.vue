@@ -5,7 +5,7 @@ const emit = defineEmits<{ (e: 'submitted'): void }>()
 
 const createModalOpen = ref(false)
 
-const employeeSchema = z.object({
+const schema = z.object({
   firstName: z.string().min(1, { message: 'Required' }),
   lastName: z.string().min(1, { message: 'Required' }),
   email: z.string().email({ message: 'Invalid email' }),
@@ -13,7 +13,7 @@ const employeeSchema = z.object({
   dob: z.string().optional()
 })
 
-const employeeFields = [
+const fields = [
   { name: 'firstName', label: 'First name', type: 'text' as const, required: true },
   { name: 'lastName', label: 'Last name', type: 'text' as const, required: true },
   { name: 'email', label: 'Email', type: 'text' as const, required: true }
@@ -26,8 +26,8 @@ const employeeFields = [
     mode="create"
     title="New Employee"
     buttonLabel="New Employee"
-    :schema="employeeSchema"
-    :fields="employeeFields"
+    :schema="schema"
+    :fields="fields"
     createUrl="/employee/create"
     @submitted="emit('submitted')"
   />

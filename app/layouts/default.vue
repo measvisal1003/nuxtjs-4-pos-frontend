@@ -3,9 +3,6 @@ import type { NavigationMenuItem } from '@nuxt/ui'
 
 const route = useRoute()
 const toast = useToast()
-const colorMode = useColorMode()
-const { logout } = useAuth()
-
 const open = ref(false)
 
 const links = [[{
@@ -72,19 +69,52 @@ const links = [[{
       }
     }]
   }, {
-  label: 'Policy',
+  label: 'Categories',
   icon: 'i-lucide-inbox',
-  to: '/policy',
+  to: '/category',
   onSelect: () => {
       open.value = false
     }
   }, {
-  label: 'Employee',
+  label: 'Suppliers',
+  icon: 'i-lucide-users',
+  to: '/supplier',
+  onSelect: () => {
+      open.value = false
+    }
+  },{
+  label: 'Employees',
   icon: 'i-lucide-user',
   to: '/employee',
   onSelect: () => {
       open.value = false
     }
+  },  {
+    label: 'Settings',
+    to: '/setting',
+    icon: 'i-lucide-cog',
+    defaultOpen: false,
+    type: 'trigger',
+    children: [{
+      label: 'Add User',
+      to: '/setting/add-user',
+      exact: true,
+      onSelect: () => {
+        open.value = false
+      }
+    }, {
+      label: 'Add Supplier',
+      to: '/setting/add-supplier',
+      onSelect: () => {
+        open.value = false
+      }
+    }, {
+      label: 'Import Product',
+      to: '/product/import',
+      onSelect: () => {
+        open.value = false
+      }
+    }]
   },
 
 ]] satisfies NavigationMenuItem[][]

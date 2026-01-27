@@ -12,18 +12,16 @@ const emit = defineEmits<{
 }>()
 
 const schema = z.object({
-  firstName: z.string().min(1, { message: 'Required' }),
-  lastName: z.string().min(1, { message: 'Required' }),
-  email: z.string().email({ message: 'Invalid email' }),
+  name: z.string().min(1, { message: 'Required' }),
+  code: z.string().min(1, { message: 'Required' }),
   active: z.boolean({ message: 'Required' })
 
 })
 
 const fields = [
   { name: 'id', label: "Id", type: 'number' as const, require: true, hidden: true},
-  { name: 'firstName', label: 'First name', type: 'text' as const, required: true },
-  { name: 'lastName', label: 'Last name', type: 'text' as const, required: true },
-  { name: 'email', label: 'Email', type: 'text' as const, required: true },
+  { name: 'name', label: 'Category Name', type: 'text' as const, required: true },
+  { name: 'code', label: 'Category Code', type: 'text' as const, required: true },
   {
     name: 'active', label: 'Active', type: 'select' as const, require: true,
     items: [{ label: 'Active', value: true }, { label: 'Inactive', value: false }]
@@ -37,13 +35,13 @@ const fields = [
     @update:open="(v) => emit('update:open', v)"
     mode="update"
     :id="id"
-    title="Edit Employee"
-    description="Update employee information"
+    title="Edit Category"
+    description="Update category information"
     buttonLabel=""
     :schema="schema"
     :fields="fields"
-    findByIdUrl="/employee"   
-    updateUrl="/employee"      
+    findByIdUrl="/category"   
+    updateUrl="/category"      
     @submitted="emit('submitted')"
   >
     <template #default></template>

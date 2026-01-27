@@ -50,13 +50,19 @@ export interface items {
   remark: string;
 }
 
-export interface Mail {
+export type PageResponse<T> = {
+  content: T[];
+  pageNumber: number;
+  pageSize: number;
+  totalRecords: number;
+  totalPages: number;
+};
+
+export interface Category {
   id: number;
-  unread?: boolean;
-  from: User;
-  subject: string;
-  body: string;
-  date: string;
+  name: string;
+  code: string;
+  active: boolean;
 }
 
 export interface Member {

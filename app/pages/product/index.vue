@@ -9,11 +9,13 @@ const {
   loadError,
   products,
   pending,
-  showModal,
+  pageNumber,
+  pageSize,
+  totalRecords,
+  totalPages
 } = useProduct()
 
 const toast = useToast()
-
 
 const selectedProduct = ref<Product | null>(null)
 const viewModalOpen = ref(false)
@@ -112,15 +114,19 @@ const columns: TableColumn<Product>[] = [
   },
   { accessorKey: 'code', header: 'Code' },
   { accessorKey: 'name', header: 'Name' },
-  { accessorKey: 'cost', header: 'Cost' },
   { accessorKey: 'price', header: 'Price' },
   { accessorKey: 'quantity', header: 'Quantity' },
   { accessorKey: 'unit', header: 'Unit' },
   {
     accessorKey: 'active',
     header: 'Active',
-    filterFn: (row, columnId, filterValue) => row.getValue(columnId) === filterValue,
-    enableHiding: true
+    filterFn: (row, columnId, filterValue) =>
+      row.getValue(columnId) === filterValue,
+    enableHiding: true,
+    cell: ({ row }) => {
+      const value = row.original.active
+      return value ? 'Active' : 'Inactive'
+    }
   },
   {
     id: 'actions',
@@ -151,8 +157,7 @@ const columns: TableColumn<Product>[] = [
 
 const filter = ref< 'true' | 'false' | 'all'>('true')
 
-watch(
-  () => table.value?.tableApi,
+watch(() => table.value?.tableApi,
   (api) => {
     if (!api) return
     api.getColumn('active')?.setFilterValue(true)
@@ -171,15 +176,21 @@ watch(filter, (newVal) => {
   else col.setFilterValue(newVal === 'true')
 })
 
-const code = computed({
-  get: (): string => {
-    return (table.value?.tableApi?.getColumn('code')?.getFilterValue() as string) || ''
-  },
-  set: (value: string) => {
-    table.value?.tableApi?.getColumn('code')?.setFilterValue(value || undefined)
-  }
-})
+// Search Filter
+const globalFilter = ref('')
+const globalFilterFn = (row: any, _columnId: string, filterValue: string) => {
+  const q = String(filterValue ?? '').toLowerCase().trim()
+  if (!q) return true
 
+  const code = String(row.original.code ?? '').toLowerCase()
+  const name = String(row.original.name ?? '').toLowerCase()
+
+  return code.includes(q) || name.includes(q)
+}
+
+watch(globalFilter, (value) => {
+  table.value?.tableApi?.setGlobalFilter(value)
+})
 </script>
 
 <template>
@@ -191,7 +202,7 @@ const code = computed({
         </template>
 
         <template #right>
-          <EmployeeAddModal @submitted="fetch" />
+          <ProductAddModal @submitted="fetch" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -208,10 +219,10 @@ const code = computed({
       <div class="flex flex-wrap items-center justify-between gap-1.5 mb-2">
         <div class="flex flex-wrap items-center gap-1.5">
           <UInput
-            v-model="code"
+            v-model="globalFilter"
             class="max-w-sm"
             icon="i-lucide-search"
-            placeholder="Filter Email..."
+            placeholder="Filter Product Code..."
           />
         </div>
         <div class="gap-2 flex">
@@ -252,6 +263,8 @@ const code = computed({
 
       <UTable
         ref="table"
+        v-model:global-filter="globalFilter"
+        :global-filter-fn="globalFilterFn"
         v-model:column-filters="columnFilters"
         v-model:column-visibility="columnVisibility"
         v-model:row-selection="rowSelection"
@@ -261,26 +274,33 @@ const code = computed({
         :data="products"
         :columns="columns"
         :loading="pending"
+        :ui="{
+          base: 'table-fixed border-separate border-spacing-0',
+          thead: '[&>tr]:bg-elevated/50 [&>tr]:after:content-none',
+          tbody: '[&>tr]:last:[&>td]:border-b-0',
+          th: 'py-2 first:rounded-l-lg last:rounded-r-lg border-y border-default first:border-l last:border-r text-black dark:text-white',
+          td: 'border-b border-default text-black dark:text-white',
+          separator: 'h-0'
+        }"
       />
 
-      <EmployeeEditModal
+      <ProductEditModal
         v-model:open="editModalOpen"
         :id="selectedId"
         @submitted="fetch"
       />
 
-
       <div class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">
         <div class="text-sm text-muted">
           {{ table?.tableApi?.getFilteredSelectedRowModel().rows.length || 0 }} of
-          {{ table?.tableApi?.getFilteredRowModel().rows.length || 0 }} row(s) selected.
+          {{ totalRecords }} row(s) selected.
         </div>
 
         <UPagination
-          :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-          :items-per-page="table?.tableApi?.getState().pagination.pageSize"
-          :total="table?.tableApi?.getFilteredRowModel().rows.length"
-          @update:page="(p: number) => table?.tableApi?.setPageIndex(p - 1)"
+          :default-page="pageNumber"
+          :items-per-page="pageSize"
+          :total="totalRecords"
+          @update:page="(p:number) => pageNumber = p"
         />
       </div>
     </template>

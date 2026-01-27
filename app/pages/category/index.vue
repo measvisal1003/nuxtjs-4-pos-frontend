@@ -2,20 +2,23 @@
 import type { TableColumn } from '@nuxt/ui'
 import { upperFirst } from 'scule'
 import { getPaginationRowModel, type Row } from '@tanstack/table-core'
-import type { Employee } from '~/types'
+import type { Category } from '~/types'
 
 const {
   fetch,
   loadError,
-  employees,
+  categories,
   pending,
-  showModal,
-} = useEmployee()
+  pageNumber,
+  pageSize,
+  totalRecords,
+  totalPages
+} = useCategory()
 
 const toast = useToast()
 
 
-const selectedEmployee = ref<Employee | null>(null)
+const selectedCategory = ref<Category | null>(null)
 const viewModalOpen = ref(false)
 const editModalOpen = ref(false)
 const selectedId = ref<string | number | null>(null)
@@ -37,7 +40,7 @@ const pagination = ref({
   pageSize: 10
 })
 
-function getRowItems(row: Row<Employee>) {
+function getRowItems(row: Row<Category>) {
   return [
     {
       type: 'label',
@@ -47,10 +50,10 @@ function getRowItems(row: Row<Employee>) {
       type: 'separator'
     },
     {
-      label: 'View Employee Details',
+      label: 'View Product Details',
       icon: 'i-lucide-list',
       onSelect() {
-        selectedEmployee.value = row.original
+        selectedCategory.value = row.original
         viewModalOpen.value = true     
       }
     },
@@ -58,7 +61,7 @@ function getRowItems(row: Row<Employee>) {
       type: 'separator'
     },
     {
-      label: 'Edit Employee',
+      label: 'Edit Product',
       icon: 'i-lucide-pencil',
       onSelect() {
         selectedId.value = row.original.id
@@ -69,20 +72,20 @@ function getRowItems(row: Row<Employee>) {
       type: 'separator'
     },
     {
-      label: 'Delete Employee',
+      label: 'Delete Product',
       icon: 'i-lucide-trash',
       color: 'error',
       onSelect() {
         toast.add({
-          title: 'Employee deleted',
-          description: 'The employee has been deleted.'
+          title: 'Product deleted',
+          description: 'The product has been deleted.'
         })
       }
     }
   ]
 }
 
-const columns: TableColumn<Employee>[] = [
+const columns: TableColumn<Category>[] = [
   {
     id: 'select',
     header: ({ table }) =>
@@ -110,14 +113,18 @@ const columns: TableColumn<Employee>[] = [
       return pageIndex * pageSize + row.index + 1
     }
   },
-  { accessorKey: 'firstName', header: 'Firstname' },
-  { accessorKey: 'lastName', header: 'Lastname' },
-  { accessorKey: 'email', header: 'Email' },
+  { accessorKey: 'code', header: 'Code' },
+  { accessorKey: 'name', header: 'Name' },
   {
     accessorKey: 'active',
     header: 'Active',
-    filterFn: (row, columnId, filterValue) => row.getValue(columnId) === filterValue,
-    enableHiding: true
+    filterFn: (row, columnId, filterValue) =>
+      row.getValue(columnId) === filterValue,
+    enableHiding: true,
+    cell: ({ row }) => {
+      const value = row.original.active
+      return value ? 'Active' : 'Inactive'
+    }
   },
   {
     id: 'actions',
@@ -168,35 +175,26 @@ watch(filter, (newVal) => {
   else col.setFilterValue(newVal === 'true')
 })
 
-// Search Filter
-const globalFilter = ref('')
-
-const globalFilterFn = (row: any, _columnId: string, filterValue: string) => {
-  const q = String(filterValue ?? '').toLowerCase().trim()
-  if (!q) return true
-
-  const code = String(row.original.code ?? '').toLowerCase()
-  const name = String(row.original.name ?? '').toLowerCase()
-
-  return code.includes(q) || name.includes(q)
-}
-
-watch(globalFilter, (value) => {
-  table.value?.tableApi?.setGlobalFilter(value)
+const code = computed({
+  get: (): string => {
+    return (table.value?.tableApi?.getColumn('code')?.getFilterValue() as string) || ''
+  },
+  set: (value: string) => {
+    table.value?.tableApi?.getColumn('code')?.setFilterValue(value || undefined)
+  }
 })
-
 </script>
 
 <template>
-  <UDashboardPanel id="employee">
+  <UDashboardPanel id="category">
     <template #header>
-      <UDashboardNavbar title="Employees">
+      <UDashboardNavbar title="List Category">
         <template #leading>
           <UDashboardSidebarCollapse />
         </template>
 
         <template #right>
-          <EmployeeAddModal @submitted="fetch" />
+          <CategoryAddModal @submitted="fetch" />
         </template>
       </UDashboardNavbar>
     </template>
@@ -205,7 +203,7 @@ watch(globalFilter, (value) => {
       <div v-if="loadError" class="mb-3">
         <UAlert
           color="error"
-          title="Failed to load employees"
+          title="Failed to load products"
           :description="loadError?.data?.message || loadError?.message || 'Unknown error'"
         />
       </div>
@@ -213,10 +211,10 @@ watch(globalFilter, (value) => {
       <div class="flex flex-wrap items-center justify-between gap-1.5 mb-2">
         <div class="flex flex-wrap items-center gap-1.5">
           <UInput
-            v-model="globalFilter"
+            v-model="code"
             class="max-w-sm"
             icon="i-lucide-search"
-            placeholder="Filter Email..."
+            placeholder="Filter Product Code..."
           />
         </div>
         <div class="gap-2 flex">
@@ -257,15 +255,13 @@ watch(globalFilter, (value) => {
 
       <UTable
         ref="table"
-        v-model:global-filter="globalFilter"
-        :global-filter-fn="globalFilterFn"
         v-model:column-filters="columnFilters"
         v-model:column-visibility="columnVisibility"
         v-model:row-selection="rowSelection"
         v-model:pagination="pagination"
         :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
         class="shrink-0"
-        :data="employees"
+        :data="categories"
         :columns="columns"
         :loading="pending"
         :ui="{
@@ -278,7 +274,7 @@ watch(globalFilter, (value) => {
         }"
       />
 
-      <EmployeeEditModal
+      <ProductEditModal
         v-model:open="editModalOpen"
         :id="selectedId"
         @submitted="fetch"
@@ -288,14 +284,14 @@ watch(globalFilter, (value) => {
       <div class="flex items-center justify-between gap-3 border-t border-default pt-4 mt-auto">
         <div class="text-sm text-muted">
           {{ table?.tableApi?.getFilteredSelectedRowModel().rows.length || 0 }} of
-          {{ table?.tableApi?.getFilteredRowModel().rows.length || 0 }} row(s) selected.
+          {{ totalRecords }} row(s) selected.
         </div>
 
         <UPagination
-          :default-page="(table?.tableApi?.getState().pagination.pageIndex || 0) + 1"
-          :items-per-page="table?.tableApi?.getState().pagination.pageSize"
-          :total="table?.tableApi?.getFilteredRowModel().rows.length"
-          @update:page="(p: number) => table?.tableApi?.setPageIndex(p - 1)"
+          :default-page="pageNumber"
+          :items-per-page="pageSize"
+          :total="totalRecords"
+          @update:page="(p:number) => pageNumber = p"
         />
       </div>
     </template>

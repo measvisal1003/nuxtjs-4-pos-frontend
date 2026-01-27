@@ -1,13 +1,13 @@
-import type { PageResponse, Product } from "~/types";
+import type { PageResponse, Category } from "~/types";
 
-export function useProduct() {
+export function useCategory() {
   const config = useRuntimeConfig();
 
   const showModal = ref(false);
   const isEditOpen = ref(false);
   const modalMode = ref<"view" | "edit">("view");
 
-  const products = ref<Product[]>([]);
+  const categories = ref<Category[]>([]);
   const pending = ref(false);
   const loadError = ref<any>(null);
   const selectedId = ref<string>("");
@@ -16,10 +16,6 @@ export function useProduct() {
     id: null,
     code: "" as string | undefined,
     name: "" as string | undefined,
-    cost: "" as string | undefined,
-    price: "" as string | undefined,
-    quantity: "" as string | undefined,
-    unit: "" as string | undefined,
     active: "" as string | undefined,
   });
 
@@ -30,11 +26,11 @@ export function useProduct() {
     try {
       pending.value = true;
       loadError.value = null;
-      products.value = await useApi<Product[]>("/product/all");
+      categories.value = await useApi<Category[]>("/category/all");
     } catch (e) {
       loadError.value = e;
       console.error("Fetch products failed:", e);
-      products.value = [];
+      categories.value = [];
     } finally {
       pending.value = false;
     }
@@ -55,16 +51,16 @@ export function useProduct() {
       pending.value = true;
       loadError.value = null;
 
-      const res = await useApi<PageResponse<Product>>(
-        `/product?pageNumber=${pageNumber.value}`,
+      const res = await useApi<PageResponse<Category>>(
+        `/category?pageNumber=${pageNumber.value}`,
       );
 
-      products.value = res.content;
+      categories.value = res.content;
       totalRecords.value = res.totalRecords;
       totalPages.value = res.totalPages;
     } catch (e) {
       loadError.value = e;
-      products.value = [];
+      categories.value = [];
     } finally {
       pending.value = false;
     }
@@ -88,7 +84,7 @@ export function useProduct() {
    * ========================== */
   return {
     // state
-    products,
+    categories,
     showModal,
     isEditOpen,
     modalMode,
