@@ -302,7 +302,7 @@ const search = computed({
         @submitted="fetchPagination"
       />
 
-      <SupplierViewModal
+      <SupplierViewContact
         v-model:open="modalOpen"
         :data="selected"
       />
