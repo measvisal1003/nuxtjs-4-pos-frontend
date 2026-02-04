@@ -65,17 +65,6 @@ function getRowItems(row: Row<EmployeeUser>) {
       type: 'separator'
     },
     {
-      label: 'Create User Login',
-      icon: 'i-lucide-pencil',
-      onSelect() {
-        selectedId.value = row.original.employee.id
-        addUserModalOpen.value = true
-      }
-    },
-    {
-      type: 'separator'
-    },
-    {
       label: 'Delete Employee',
       icon: 'i-lucide-trash',
       color: 'error',
@@ -317,11 +306,11 @@ watch(globalFilter, (value) => {
         @submitted="fetchPagination"
       />
 
-      <EmployeeAddUserModal 
+      <!-- <EmployeeAddUser
         v-model:open="addUserModalOpen"
         :id="selectedId"
         @submitted="fetchPagination"
-      />
+      /> -->
 
       <EmployeeViewUser 
         v-model:open="modalOpen"

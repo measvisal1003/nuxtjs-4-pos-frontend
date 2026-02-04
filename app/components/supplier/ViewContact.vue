@@ -10,13 +10,26 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:open': [boolean]
+  submitted: []  
 }>()
 
 const UBadge = resolveComponent('UBadge')
 const UButton = resolveComponent('UButton')
 const UDropdownMenu = resolveComponent('UDropdownMenu')
 const UCheckbox = resolveComponent('UCheckbox')
-const supplierName = computed(() => props.data?.supplier?.name ?? '')
+
+const editModalOpen = ref(false)
+const addModalOpen = ref(false)
+
+const selectedId = ref<string | number | null>(null)
+
+function openAddUser() {
+  selectedId.value = props.data?.supplier?.id ?? null
+  addModalOpen.value = true
+}
+
+const name = computed(() => props.data?.supplier?.name ?? '')
+
 const contacts = computed(() => props.data?.supplierContacts ?? [])
 
 function getRowItem(row: Row<SupplierContact>) {
@@ -104,15 +117,26 @@ const columns: TableColumn<SupplierContact>[] = [
     @update:open="(v) => emit('update:open', v)"
   >
     <template #header>
-      <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center justify-between w-full">
+      
+        <!-- LEFT -->
         <div>
-          <div class="font-semibold">Supplier Contacts</div>
-          <div class="text-sm text-muted" v-if="supplierName">
-            {{ supplierName }} • {{ contacts.length }} contact(s)
+          <div class="font-semibold">Supplier Contact</div>
+          <div class="text-sm text-muted" v-if="name">
+            Supplier: {{ name }}
           </div>
         </div>
+
+        <!-- RIGHT -->
+        <SupplierAddContact
+          v-model:open="addModalOpen"
+          :id="props.data?.supplier?.id ?? null"
+          @submitted="() => emit('submitted')"
+        />
+
       </div>
     </template>
+
     <template #body>
       <div v-if="!data" class="text-sm text-muted">
         No supplier selected.
@@ -135,6 +159,12 @@ const columns: TableColumn<SupplierContact>[] = [
         <div v-if="contacts.length === 0" class="text-sm text-muted mt-3">
           This supplier has no contacts.
         </div>
+      </div>
+    </template>
+
+    <template #footer>
+      <div class="text-sm text-muted" v-if="name">
+        Total Records: {{ contacts.length }}
       </div>
     </template>
   </UModal>
