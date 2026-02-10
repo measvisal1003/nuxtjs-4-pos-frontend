@@ -13,6 +13,14 @@ const links = [[{
     open.value = false
   }
 }, {
+  label: 'POS',
+  icon: 'i-lucide-list',
+  defaultOpen: false,
+  to: '/pos',
+  onSelect: () => {
+    open.value = false
+  }
+},  {
     label: 'Products',
     to: '/product',
     icon: 'i-lucide-package-open',
