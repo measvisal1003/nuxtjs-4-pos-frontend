@@ -1,197 +1,292 @@
 <script setup lang="ts">
-definePageMeta({
-  layout: "blank"
-})
+import toArray from '~/utils/helper'
 
-// Mock Data
-const categories = ['All', 'Coffee', 'Tea', 'Bakery', 'Food']
-const products = [
-  { id: 1, name: 'Espresso', price: 3.50, category: 'Coffee', image: 'i-lucide-coffee' },
-  { id: 2, name: 'Cappuccino', price: 4.50, category: 'Coffee', image: 'i-lucide-coffee' },
-  { id: 3, name: 'Latte', price: 4.50, category: 'Coffee', image: 'i-lucide-coffee' },
-  { id: 4, name: 'Green Tea', price: 3.00, category: 'Tea', image: 'i-lucide-cup-soda' },
-  { id: 5, name: 'Croissant', price: 3.50, category: 'Bakery', image: 'i-lucide-croissant' },
-  { id: 6, name: 'Bagel', price: 3.00, category: 'Bakery', image: 'i-lucide-circle-dot' },
-  { id: 7, name: 'Sandwich', price: 7.50, category: 'Food', image: 'i-lucide-sandwich' },
-  { id: 8, name: 'Salad', price: 8.00, category: 'Food', image: 'i-lucide-salad' },
-]
+definePageMeta({ layout: 'blank' })
 
+type Customer = { id: number; name: string }
+
+// ---------- State ----------
+const products = ref<any[]>([])
+const categories = ref<string[]>(['All'])
 const searchQuery = ref('')
 const selectedCategory = ref('All')
-const cart = ref<{ product: typeof products[0], quantity: number }[]>([])
+const cart = ref<{ product: any; quantity: number }[]>([])
 const isPaymentModalOpen = ref(false)
 
+const customers = ref<Customer[]>([])
+const customerItems = ref<{ label: string; value: number }[]>([])
+const selectedCustomerId = ref<number | undefined>(undefined)
+
+// ---------- Loaders ----------
+async function loadCustomers() {
+  const res = await useApi('/customer/all')
+  const list = toArray<Customer>(res)
+
+  customers.value = list
+  customerItems.value = list.map(c => ({ label: c.name, value: c.id }))
+
+  const first = list.at(0) // Customer | undefined
+  if (selectedCustomerId.value === undefined && first) {
+    selectedCustomerId.value = first.id
+  }
+}
+
+
+async function loadProductsAndCategories() {
+  const [prodRes, catRes] = await Promise.all([
+    useApi('/product/all'),
+    useApi('/category/all')
+  ])
+
+  const prodList = toArray<any>(prodRes)
+  const catList = toArray<any>(catRes)
+
+  products.value = prodList
+  categories.value = ['All', ...catList.map((c: any) => c.name).filter(Boolean)]
+}
+
+onMounted(async () => {
+  try {
+    await Promise.all([loadProductsAndCategories(), loadCustomers()])
+  } catch (err) {
+    console.error('Failed to sync POS data:', err)
+  }
+})
+
+// ---------- Derived ----------
 const filteredProducts = computed(() => {
-  return products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.value.toLowerCase())
-    const matchesCategory = selectedCategory.value === 'All' || p.category === selectedCategory.value
+  const query = searchQuery.value.toLowerCase().trim()
+
+  return products.value.filter((p) => {
+    const name = String(p?.name ?? '').toLowerCase()
+    const code = String(p?.code ?? '').toLowerCase()
+
+    const matchesSearch = !query || name.includes(query) || code.includes(query)
+    const matchesCategory =
+      selectedCategory.value === 'All' || p?.category?.name === selectedCategory.value
+
     return matchesSearch && matchesCategory
   })
 })
 
-const subtotal = computed(() => cart.value.reduce((sum, item) => sum + (item.product.price * item.quantity), 0))
-const tax = computed(() => subtotal.value * 0.08)
-const total = computed(() => subtotal.value + tax.value)
+const subtotalCents = computed(() =>
+  cart.value.reduce((sum, item) => sum + Math.round(Number(item.product.price ?? 0) * 100) * item.quantity, 0)
+)
+const taxCents = computed(() => Math.round(subtotalCents.value * 0.08))
+const totalCents = computed(() => subtotalCents.value + taxCents.value)
 
-function addToCart(product: typeof products[0]) {
+const subtotal = computed(() => subtotalCents.value / 100)
+const tax = computed(() => taxCents.value / 100)
+const total = computed(() => totalCents.value / 100)
+
+const totalItems = computed(() => cart.value.reduce((sum, i) => sum + i.quantity, 0))
+
+const selectedCustomer = computed(() => {
+  const id = selectedCustomerId.value
+  if (id === undefined) return null
+  return customers.value.find(c => c.id === id) ?? null
+})
+
+const selectedCustomerName = computed(() => selectedCustomer.value?.name ?? 'Walk-in')
+
+// ---------- Cart Actions ----------
+function addToCart(product: any) {
   const existing = cart.value.find(i => i.product.id === product.id)
-  if (existing) {
-    existing.quantity++
-  } else {
-    cart.value.push({ product, quantity: 1 })
-  }
+  if (existing) existing.quantity++
+  else cart.value.push({ product, quantity: 1 })
 }
 
-// function updateQuantity(index: number, delta: number) {
-//   const item = cart.value[index]
-//   item.quantity += delta
-//   if (item.quantity <= 0) {
-//     cart.value.splice(index, 1)
-//   }
-// }
+function updateQuantity(index: number, delta: number) {
+  const item = cart.value[index]
+  if (!item) return
+  item.quantity += delta
+  if (item.quantity <= 0) cart.value.splice(index, 1)
+}
 
 function handleCheckout() {
-  isPaymentModalOpen.value = true
+  if (cart.value.length > 0) isPaymentModalOpen.value = true
+  else alert('Cart is empty!')
 }
 
-async function confirmPayment() {
-  // Store the current total/cart before clearing
-  const orderData = {
-    items: cart.value.map(i => ({ name: i.product.name, price: i.product.price, quantity: i.quantity })),
-    total: total.value,
-    date: new Date().toISOString()
-  }
+// ---------- Payment ----------
+async function confirmPayment(method: 'KHQR' | 'CASH' = 'KHQR') {
+  try {
+    if (cart.value.length === 0) return
 
-  // Clear cart
-  cart.value = []
-  isPaymentModalOpen.value = false
-
-  // Redirect to receipt page with order data
-  await navigateTo({
-    path: '/receipt',
-    query: {
-      data: JSON.stringify(orderData)
+    const customerId = selectedCustomerId.value
+    if (customerId === undefined) {
+      alert('Please select customer')
+      return
     }
-  })
-}
 
+    // ✅ receipt data (for receipt UI)
+    const receiptData = {
+      customerId, // backend id
+      customerName: selectedCustomerName.value, // display only
+      items: cart.value.map(i => ({
+        name: i.product.name,
+        price: Number(i.product.price ?? 0),
+        quantity: i.quantity
+      })),
+      total: total.value,
+      date: new Date().toISOString(),
+      paymentMethod: method
+    }
+
+    // ✅ backend body (only id)
+    const body = cart.value.map(i => ({
+      code: i.product.code,
+      quantity: i.quantity,
+      customerId,
+      paymentMethod: method
+    }))
+
+    await useApi('/order/create', { method: 'POST', body }) // change to /api/v1/order/create if needed
+
+    isPaymentModalOpen.value = false
+    cart.value = []
+
+    await navigateTo({
+      path: '/receipt',
+      query: { data: JSON.stringify(receiptData) }
+    })
+  } catch (err) {
+    console.error('Payment failed:', err)
+    alert('Payment failed')
+  }
+}
 </script>
 
 <template>
-  <div class="flex h-screen gap-4">
+  <div class="flex h-screen gap-4 p-4 bg-gray-50 dark:bg-gray-950 overflow-hidden">
     <!-- Product Section -->
-    <div class="flex-1 flex flex-col gap-4 min-w-0">
-      <!-- Filters -->
-      <div class="flex gap-4 p-4 items-center justify-between">
-        <div class="flex gap-2">
-          <UButton 
-            v-for="cat in categories" 
-            :key="cat"
-            :label="cat"
-            :variant="selectedCategory === cat ? 'solid' : 'ghost'"
-            color="info"
-            icon="i-lucide-check"
-            size="md"
-            @click="selectedCategory = cat"
-          />
+    <div class="flex-1 flex flex-col min-w-0">
+      <!-- Filters Header -->
+      <div class="flex justify-between items-center mb-4 bg-white dark:bg-gray-900 p-2 rounded-xl shadow-sm">
+        <div class="flex items-center gap-4">
+          <NuxtLink to="/">
+            <UButton variant="ghost" color="neutral" icon="i-lucide-arrow-left" label="Back" />
+          </NuxtLink>
+          <div class="h-6 w-px bg-gray-200 dark:bg-gray-700" />
+          <div class="flex items-center gap-1 overflow-x-auto">
+            <UButton
+              v-for="cat in categories"
+              :key="cat"
+              :label="cat"
+              :variant="selectedCategory === cat ? 'solid' : 'ghost'"
+              :color="selectedCategory === cat ? 'info' : 'neutral'"
+              size="sm"
+              @click="selectedCategory = cat"
+            />
+          </div>
         </div>
-        <UInput 
-          v-model="searchQuery"
-          icon="i-lucide-search"
-          placeholder="Search items..."
-          class="w-64"
-          size="lg"
-        />
+
+        <UInput v-model="searchQuery" icon="i-lucide-search" placeholder="Search items..." class="w-72">
+          <template #trailing v-if="searchQuery">
+            <UButton icon="i-lucide-x" variant="ghost" size="xs" @click="searchQuery=''" />
+          </template>
+        </UInput>
       </div>
 
-      <!-- Grid -->
-      <div class="grid grid-cols-2 p-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 overflow-y-auto pb-4">
-        <UCard
-          v-for="product in filteredProducts"
-          :key="product.id"
-          class="cursor-pointer hover:ring-2 hover:ring-primary-500 transition-all"
-          @click="addToCart(product)"
-        >
-          <div class="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center mb-3">
-            <UIcon :name="product.image" class="w-12 h-12 text-gray-400" />
-          </div>
-          <div class="font-semibold truncate">{{ product.name }}</div>
-          <div class="text-gray-500 text-sm">${{ product.price.toFixed(2) }}</div>
-        </UCard>
+      <!-- Products Grid -->
+      <div class="flex-1 overflow-y-auto p-2">
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4">
+          <UCard
+            v-for="product in filteredProducts"
+            :key="product.id"
+            class="cursor-pointer hover:ring-2 hover:ring-primary-500 transition-all active:scale-95"
+            :ui="{ body: 'p-3' }"
+            @click="addToCart(product)"
+          >
+            <div class="aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center mb-3">
+              <UIcon :name="product.image || 'i-lucide-package'" class="w-12 h-12 text-gray-400" />
+            </div>
+            <div class="font-semibold truncate text-sm">{{ product.name }}</div>
+            <div class="text-info-600 dark:text-info-400 font-bold text-sm mt-1">
+              ${{ Number(product.price ?? 0).toFixed(2) }}
+            </div>
+          </UCard>
+        </div>
       </div>
     </div>
 
     <!-- Cart Section -->
-    <!-- 1. Add h-full to the card and use the :ui prop to make the body flexible -->
-    <UCard 
-      class="w-96 flex flex-col h-full overflow-hidden" 
-      :ui="{ 
-        body: 'flex-1 overflow-y-auto p-0', 
-        header: 'p-4', 
-        footer: 'p-4' 
+    <UCard
+      class="w-96 flex flex-col h-full shadow-xl overflow-hidden"
+      :ui="{
+        body: 'flex-1 flex flex-col p-0 overflow-hidden',
+        header: 'p-4 shrink-0',
+        footer: 'p-4 border-t dark:border-gray-800 shrink-0'
       }"
     >
       <template #header>
         <div class="flex items-center justify-between">
-          <h2 class="font-semibold text-lg">Current Order</h2>
-          <UBadge color="info" variant="subtle">{{ cart.length }} items</UBadge>
+          <h2 class="font-bold text-lg">Current Order</h2>
+          <UBadge color="info" variant="subtle" size="lg">{{ totalItems }} items</UBadge>
+        </div>
+
+        <div class="mt-3">
+          <div class="text-xs text-gray-500 mb-1">Customer</div>
+          <USelect
+            v-model="selectedCustomerId"
+            :items="customerItems"
+            placeholder="Select customer"
+            class="w-full"
+          />
         </div>
       </template>
 
-      <!-- 2. This DIV now takes all available space and scrolls -->
+      <!-- Cart Items -->
       <div class="flex-1 overflow-y-auto space-y-4">
-        <div v-if="cart.length === 0" class="h-64 flex flex-col items-center justify-center text-gray-400 space-y-2">
-          <UIcon name="i-lucide-shopping-cart" class="w-12 h-12" />
-          <p>No items added</p>
+        <div v-if="cart.length === 0" class="h-full flex flex-col items-center justify-center text-gray-400 space-y-2 opacity-60">
+          <UIcon name="i-lucide-shopping-cart" class="w-16 h-16" />
+          <p class="font-medium">No items added</p>
         </div>
-        
-        <div v-else v-for="(item, idx) in cart" :key="item.product.id" class="flex items-center gap-3">
-          <div class="w-12 h-12 bg-gray-100 dark:bg-gray-800 rounded-md flex items-center justify-center shrink-0">
-            <UIcon :name="item.product.image" class="w-6 h-6 text-gray-500" />
+
+        <div
+          v-else
+          v-for="(item, idx) in cart"
+          :key="item.product.id"
+          class="flex items-center gap-3 bg-gray-50 dark:bg-gray-800/50 p-2 rounded-lg"
+        >
+          <div class="w-12 h-12 bg-white dark:bg-gray-800 rounded-md flex items-center justify-center shrink-0 shadow-sm">
+            <UIcon :name="item.product.image || 'i-lucide-package'" class="w-6 h-6 text-gray-400" />
           </div>
           <div class="flex-1 min-w-0">
-            <div class="font-medium truncate text-sm">{{ item.product.name }}</div>
-            <div class="text-xs text-gray-500">${{ item.product.price.toFixed(2) }}</div>
+            <div class="font-semibold truncate text-sm">{{ item.product.name }}</div>
+            <div class="text-xs text-gray-500">${{ Number(item.product.price ?? 0).toFixed(2) }}</div>
           </div>
-          <div class="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
-            <UButton 
-              icon="i-lucide-minus" 
-              color="info" 
-              variant="ghost" 
-              size="xs" 
-            />
+          <div class="flex items-center gap-1 bg-white dark:bg-gray-900 rounded-md p-1 shadow-sm">
+            <UButton icon="i-lucide-minus" color="info" variant="ghost" size="xs" @click.stop="updateQuantity(idx, -1)" />
             <span class="w-6 text-center text-xs font-bold">{{ item.quantity }}</span>
-            <UButton 
-              icon="i-lucide-plus" 
-              color="info" 
-              variant="ghost" 
-              size="xs" 
-            />
+            <UButton icon="i-lucide-plus" color="info" variant="ghost" size="xs" @click.stop="updateQuantity(idx, 1)" />
           </div>
         </div>
       </div>
 
       <template #footer>
-        <!-- 3. This remains fixed at the bottom -->
         <div class="space-y-3">
           <div class="space-y-1 text-sm">
             <div class="flex justify-between text-gray-500">
               <span>Subtotal</span>
               <span>${{ subtotal.toFixed(2) }}</span>
             </div>
-            <div class="flex justify-between text-gray-500">
+            <div class="flex justify-between text-gray-500 border-b dark:border-gray-800 pb-2">
               <span>Tax (8%)</span>
               <span>${{ tax.toFixed(2) }}</span>
             </div>
           </div>
-          <div class="flex justify-between font-bold text-xl">
+
+          <div class="flex justify-between font-black text-2xl mb-2">
             <span>Total</span>
-            <span>${{ total.toFixed(2) }}</span>
+            <span class="text-info-600">${{ total.toFixed(2) }}</span>
           </div>
-          <UButton 
-            block 
-            size="lg" 
-            color="primary" 
+
+          <UButton
+            block
+            size="xl"
+            color="primary"
+            class="font-bold"
             :disabled="cart.length === 0"
             @click="handleCheckout"
           >
@@ -201,22 +296,38 @@ async function confirmPayment() {
       </template>
     </UCard>
 
-
-    <UModal v-model:open="isPaymentModalOpen" title="Complete Payment">
+    <!-- Payment Modal -->
+    <UModal v-model:open="isPaymentModalOpen" title="Payment">
       <template #body>
-        <div class="space-y-6">
-          <div class="text-center space-y-1">
-            <div class="text-4xl font-bold">${{ total.toFixed(2) }}</div>
-            <div class="text-gray-500">Total Amount</div>
+        <div class="p-6">
+          <div class="text-center mb-8">
+            <div class="text-gray-500 uppercase text-xs font-bold tracking-widest">Total Amount</div>
+            <div class="text-5xl font-black text-primary-600 mt-1">${{ total.toFixed(2) }}</div>
+            <div class="text-sm text-gray-500 mt-2">
+              Customer: <span class="font-semibold">{{ selectedCustomerName }}</span>
+            </div>
           </div>
-          <div class="grid grid-cols-2 gap-4">
-            <UButton block size="lg" color="info" variant="outline" icon="i-lucide-banknote" label="Cash" />
-            <UButton block size="lg" color="info" variant="outline" icon="i-lucide-credit-card" label="Card" />
+
+          <div class="grid grid-cols-2 gap-4 mb-6">
+            <UButton
+              block size="xl" color="info" variant="outline"
+              icon="i-lucide-banknote" label="Cash"
+              class="h-20 flex-col gap-2"
+              @click="confirmPayment('CASH')"
+            />
+            <UButton
+              block size="xl" color="info" variant="outline"
+              icon="i-lucide-qr-code" label="QR Code"
+              class="h-20 flex-col gap-2"
+              @click="confirmPayment('KHQR')"
+            />
+          </div>
+
+          <div class="flex gap-2">
+            <UButton label="Cancel" color="info" variant="ghost" class="flex-1" @click="isPaymentModalOpen = false" />
+            <UButton label="Confirm (Cash)" color="primary" class="flex-1 font-bold" @click="confirmPayment('CASH')" />
           </div>
         </div>
-      </template>
-      <template #footer>
-        <UButton block size="lg" color="primary" label="Confirm Payment" @click="confirmPayment" />
       </template>
     </UModal>
   </div>
