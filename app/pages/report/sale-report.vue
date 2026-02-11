@@ -4,6 +4,6 @@
 
 <template>
   <div>
-    Sale Report Page
+    <span>Sale Report View</span>
   </div>
 </template>

@@ -4,6 +4,6 @@
 
 <template>
   <div>
-    <span>Customer Page</span>
+    <span>Customer View Page</span>
   </div>
 </template>
