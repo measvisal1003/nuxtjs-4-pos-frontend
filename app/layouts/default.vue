@@ -61,14 +61,14 @@ const links = [[{
     }
   }, {
   label: 'Customers',
-  icon: 'i-lucide-users',
+  icon: 'i-lucide-users-round',
   to: '/customer',
   onSelect: () => {
       open.value = false
     }
-  },{
+  }, {
   label: 'Suppliers',
-  icon: 'i-lucide-users',
+  icon: 'i-lucide-contact',
   to: '/supplier',
   onSelect: () => {
       open.value = false
@@ -80,27 +80,29 @@ const links = [[{
   onSelect: () => {
       open.value = false
     }
-  }, {
-    label: 'Report',
+  },  {
+    label: 'Reports',
     to: '/report',
     icon: 'i-lucide-book-text',
     defaultOpen: false,
     type: 'trigger',
-    children: [{
+  children: [
+    {
       label: 'Sale Report',
       to: '/report/sale-report',
       exact: true,
       onSelect: () => {
         open.value = false
       }
-    }, {
+    },{
       label: 'Quantity Adjustment',
       to: '/product/quantity-adjustment',
+      exact: true,
       onSelect: () => {
         open.value = false
       }
     }]
-  },{
+  }, {
     label: 'Settings',
     to: '/setting',
     icon: 'i-lucide-cog',
